@@ -64,7 +64,7 @@ pnpm start
 ### 2. Sessions Page
 - **Header Controls:** Title reflects the first command; `sessionId:` badge includes a copy button and displays the UUID if present.
 - **Live Status:** Running or waiting tasks surface badges and actions (abort, resume). The page auto-scrolls as new turns arrive.
-- **Tooling:** Diff viewer, command outputs, and SSE updates keep the timeline synchronized with on-disk JSONL changes and `history.jsonl` events.
+- **Tooling:** Diff viewer, command outputs, and SSE updates keep the timeline synchronized with on-disk JSONL changes and `history.jsonl` events. Consecutive Tool Use entries now collapse into a single accordion so long automation bursts stay scannable.
 
 ### 3. Real-time Sync & History
 - The backend merges timestamps from both the session JSONL files and `~/.codex/history.jsonl`, so the “Last modified” column always reflects the latest Codex activity.

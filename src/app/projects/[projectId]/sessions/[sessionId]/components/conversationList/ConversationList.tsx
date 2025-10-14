@@ -3,11 +3,17 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import type {
   CodexSessionTurn,
   CodexToolCall,
   CodexToolResult,
 } from "@/server/service/types";
+
+type ToolPair = {
+  call: CodexToolCall;
+  result?: CodexToolResult;
+};
 
 const formatTimestamp = (timestamp: string | null) => {
   if (!timestamp) return "";
@@ -67,7 +73,7 @@ const AssistantMessage = ({
   );
 };
 
-const pairToolCalls = (turn: CodexSessionTurn) => {
+const pairToolCalls = (turn: CodexSessionTurn): ToolPair[] => {
   const resultByCallId = new Map<string, CodexToolResult>();
   for (const result of turn.toolResults) {
     if (result.callId) {
@@ -75,14 +81,13 @@ const pairToolCalls = (turn: CodexSessionTurn) => {
     }
   }
 
-  const paired: Array<{ call: CodexToolCall; result?: CodexToolResult }> =
-    turn.toolCalls.map((call) => {
-      const result = call.callId ? resultByCallId.get(call.callId) : undefined;
-      if (call.callId && result) {
-        resultByCallId.delete(call.callId);
-      }
-      return { call, result };
-    });
+  const paired: ToolPair[] = turn.toolCalls.map((call) => {
+    const result = call.callId ? resultByCallId.get(call.callId) : undefined;
+    if (call.callId && result) {
+      resultByCallId.delete(call.callId);
+    }
+    return { call, result };
+  });
 
   // Any leftover results without a matching call
   for (const result of turn.toolResults) {
@@ -133,9 +138,11 @@ const JsonViewer = ({ data }: { data: string | null }) => {
 const ToolCallCard = ({
   call,
   result,
+  variant = "default",
 }: {
   call: CodexToolCall;
   result?: CodexToolResult;
+  variant?: "default" | "nested";
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isInputOpen, setIsInputOpen] = useState(false);
@@ -148,9 +155,20 @@ const ToolCallCard = ({
     }
   }, [isExpanded]);
 
+  const wrapperClassName = cn(
+    "w-full bg-blue-50/50 dark:bg-blue-950/10 border-blue-200/50 dark:border-blue-800/50 px-3 !py-3",
+    variant === "default" ? "max-w-4xl" : "max-w-full",
+    variant === "nested" && "px-2 !py-2",
+  );
+
+  const contentClassName = cn(
+    "px-4 !py-2",
+    variant === "nested" && "px-3 !py-1.5",
+  );
+
   return (
-    <Card className="p-1 max-w-4xl bg-blue-50/50 dark:bg-blue-950/10 border-blue-200/50 dark:border-blue-800/50">
-      <CardContent className="px-4 !py-2">
+    <Card className={wrapperClassName}>
+      <CardContent className={contentClassName}>
         <button
           type="button"
           onClick={() => setIsExpanded((prev) => !prev)}
@@ -229,6 +247,58 @@ const ToolCallCard = ({
   );
 };
 
+const ToolCallGroup = ({ pairs }: { pairs: ToolPair[] }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const toolNames = Array.from(
+    new Set(pairs.map((pair) => formatToolName(pair.call.name))),
+  );
+  const previewNames = toolNames.slice(0, 3).join(", ");
+  const remainingCount = toolNames.length > 3 ? toolNames.length - 3 : 0;
+
+  return (
+    <Card className="max-w-4xl bg-blue-100/40 dark:bg-blue-950/20 border-blue-200/60 dark:border-blue-800/60 !py-3">
+      <CardContent className="px-4 !py-2 space-y-2">
+        <button
+          type="button"
+          onClick={() => setIsExpanded((prev) => !prev)}
+          className="flex w-full items-center gap-2 text-sm font-semibold text-blue-800 hover:text-blue-900 dark:text-blue-200 dark:hover:text-blue-100 transition-colors"
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          <span>Tool Uses</span>
+          <Badge
+            variant="secondary"
+            className="text-xs bg-transparent border-blue-200/80 dark:border-blue-800/80 text-blue-700 dark:text-blue-300"
+          >
+            {pairs.length}
+          </Badge>
+          <span className="ml-auto text-xs text-muted-foreground truncate">
+            {previewNames}
+            {remainingCount > 0 ? `, +${remainingCount} more` : ""}
+          </span>
+        </button>
+
+        {isExpanded && (
+          <div className="space-y-3">
+            {pairs.map(({ call, result }) => (
+              <ToolCallCard
+                key={`${call.id}-${result?.id ?? "result"}`}
+                call={call}
+                result={result}
+                variant="nested"
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
 export const ConversationList = ({ turns }: { turns: CodexSessionTurn[] }) => {
   if (turns.length === 0) {
     return (
@@ -242,6 +312,7 @@ export const ConversationList = ({ turns }: { turns: CodexSessionTurn[] }) => {
     <div className="flex flex-col gap-10">
       {turns.map((turn) => {
         const toolPairs = pairToolCalls(turn);
+        const singlePair = toolPairs.length === 1 ? toolPairs[0] : null;
 
         return (
           <section key={turn.id} className="flex flex-col gap-3">
@@ -254,13 +325,11 @@ export const ConversationList = ({ turns }: { turns: CodexSessionTurn[] }) => {
 
             {/* Thought process (assistant reasoning) intentionally hidden per Codex UX request */}
 
-            {toolPairs.map(({ call, result }) => (
-              <ToolCallCard
-                key={`${call.id}-${result?.id ?? "result"}`}
-                call={call}
-                result={result}
-              />
-            ))}
+            {toolPairs.length > 1 ? (
+              <ToolCallGroup pairs={toolPairs} />
+            ) : singlePair ? (
+              <ToolCallCard call={singlePair.call} result={singlePair.result} />
+            ) : null}
 
             {turn.assistantMessages.length > 0 ? (
               <div className="flex flex-col gap-4">
