@@ -45,3 +45,6 @@ RELEASE_WORKFLOW.md
 
 qiita/
 docs/
+
+.easy-sdd/
+.vscode/

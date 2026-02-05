@@ -185,42 +185,24 @@ export class CodexTaskController {
         }
       };
 
-      const jsonFlag = (() => {
-        const useExperimental = (
-          process.env as NodeJS.ProcessEnv & {
-            CODEX_USE_EXPERIMENTAL_JSON?: string;
-          }
-        ).CODEX_USE_EXPERIMENTAL_JSON;
-        if (useExperimental) {
-          if (["1", "true", "yes"].includes(useExperimental.toLowerCase())) {
-            return "--experimental-json";
-          }
-        }
-        return "--json";
-      })();
-
       const args = [
         "exec",
-        jsonFlag,
-        "--sandbox",
-        "workspace-write",
+        "--experimental-json",
+        "--full-auto",
         "-c",
         'sandbox_workspace_write={network_access=true,writable_roots=["~/.cache","~/.uv"]}',
-        "-c",
-        "mcp_servers.serena.startup_timeout_sec=30",
         "--cd",
         options.cwd,
       ];
 
       if (options.sessionUuid) {
-        args.push("resume", options.sessionUuid, options.message);
-      } else {
-        args.push(options.message);
+        args.push("resume", options.sessionUuid);
       }
 
       const childEnv = {
         ...process.env,
-      } as NodeJS.ProcessEnv & { RUST_LOG?: string };
+        CODEX_ORIGINATOR: "codex_viewer",
+      } as NodeJS.ProcessEnv & { RUST_LOG?: string; CODEX_ORIGINATOR?: string };
       if (!childEnv.RUST_LOG) {
         childEnv.RUST_LOG = "warn,codex_core::mcp_connection_manager=off";
       }
@@ -228,10 +210,23 @@ export class CodexTaskController {
       const child = spawn("codex", args, {
         cwd: options.cwd,
         env: childEnv,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
       });
 
       task.process = child;
+
+      // stdin経由でメッセージを送信（SDK方式）
+      if (child.stdin) {
+        child.stdin.write(options.message);
+        child.stdin.end();
+        child.stdin.on("error", (error) => {
+          console.error("Codex stdin error:", error);
+        });
+      } else {
+        child.kill();
+        rejectOnce(new Error("Child process has no stdin"));
+        return;
+      }
 
       const rl = readline.createInterface({ input: child.stdout });
 
@@ -300,8 +295,18 @@ export class CodexTaskController {
         try {
           const parsed = JSON.parse(trimmed) as {
             type?: string;
+            thread_id?: string;
             payload?: unknown;
           };
+
+          // thread.started から即座にセッションIDを取得
+          if (parsed.type === "thread.started" && parsed.thread_id) {
+            task.sessionUuid = parsed.thread_id;
+            this.emitTaskChange();
+            ensureSessionPath();
+          }
+
+          // session_meta からのフォールバック（互換性のため維持）
           if (
             parsed.type === "session_meta" &&
             parsed.payload &&
@@ -310,7 +315,7 @@ export class CodexTaskController {
             "id" in parsed.payload
           ) {
             const sessionIdValue = (parsed.payload as { id?: unknown }).id;
-            if (typeof sessionIdValue === "string") {
+            if (typeof sessionIdValue === "string" && !task.sessionUuid) {
               task.sessionUuid = sessionIdValue;
               this.emitTaskChange();
               ensureSessionPath();
@@ -334,6 +339,7 @@ export class CodexTaskController {
 
       child.on("exit", (code) => {
         rl.close();
+        child.removeAllListeners();
         task.process = null;
         if (task.status === "running") {
           updateStatus(code === 0 ? "completed" : "failed");
@@ -378,6 +384,7 @@ export class CodexTaskController {
 
       child.on("error", (error) => {
         rl.close();
+        child.removeAllListeners();
         task.process = null;
         updateStatus("failed");
         this.emitTaskChange();
