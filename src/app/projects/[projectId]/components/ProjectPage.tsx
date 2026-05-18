@@ -25,6 +25,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/date/format";
 import { useConfig } from "../../../hooks/useConfig";
 import { projectQueryConfig, useProject } from "../hooks/useProject";
 import { firstCommandToTitle } from "../services/firstCommandToTitle";
@@ -164,15 +165,12 @@ export const ProjectPageContent = ({ projectId }: { projectId: string }) => {
                     <p className="text-sm text-muted-foreground">
                       Last modified:{" "}
                       {session.meta.lastModifiedAt
-                        ? new Date(
-                            session.meta.lastModifiedAt,
-                          ).toLocaleDateString()
+                        ? formatDisplayDate(session.meta.lastModifiedAt)
                         : ""}
                     </p>
                     {session.meta.startedAt ? (
                       <p className="text-xs text-muted-foreground">
-                        Started:{" "}
-                        {new Date(session.meta.startedAt).toLocaleString()}
+                        Started: {formatDisplayDateTime(session.meta.startedAt)}
                       </p>
                     ) : null}
                     <p className="text-xs text-muted-foreground font-mono">

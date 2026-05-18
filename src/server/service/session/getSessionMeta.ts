@@ -33,6 +33,14 @@ export const getSessionMeta = async (
       kind: "text",
       content: firstTurnWithUserMessage.userMessage.text,
     };
+  } else if (
+    typeof parsed.sessionMeta.instructions === "string" &&
+    parsed.sessionMeta.instructions.trim().length > 0
+  ) {
+    firstCommand = {
+      kind: "text",
+      content: "[system instructions only]",
+    };
   }
 
   const sessionMeta: SessionMeta = {

@@ -227,3 +227,7 @@ export const findLatestSessionForWorkspace = async (
 export const getCachedSessionRecord = (filePath: string) => {
   return sessionCache.get(filePath) ?? null;
 };
+
+export const removeCachedSessionRecord = (filePath: string) => {
+  sessionCache.delete(filePath);
+};

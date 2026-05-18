@@ -1,5 +1,5 @@
 import { createReadStream, existsSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 
 import { codexHistoryFilePath } from "../paths";
@@ -17,10 +17,32 @@ const toMillis = (timestamp: number) => {
 let cachedHistoryMtime = 0;
 let cachedHistoryMap: Map<string, Date> | null = null;
 
+const clearHistoryCache = () => {
+  cachedHistoryMtime = 0;
+  cachedHistoryMap = null;
+};
+
+const parseHistoryLine = (
+  line: string,
+): {
+  session_id?: unknown;
+  ts?: unknown;
+  text?: unknown;
+} | null => {
+  try {
+    return JSON.parse(line) as {
+      session_id?: unknown;
+      ts?: unknown;
+      text?: unknown;
+    };
+  } catch {
+    return null;
+  }
+};
+
 export const getHistoryTimestamps = async (): Promise<Map<string, Date>> => {
   if (!existsSync(codexHistoryFilePath)) {
-    cachedHistoryMap = null;
-    cachedHistoryMtime = 0;
+    clearHistoryCache();
     return new Map();
   }
 
@@ -42,27 +64,23 @@ export const getHistoryTimestamps = async (): Promise<Map<string, Date>> => {
       continue;
     }
 
-    try {
-      const parsed = JSON.parse(trimmed) as {
-        session_id?: unknown;
-        ts?: unknown;
-      };
+    const parsed = parseHistoryLine(trimmed);
+    if (!parsed) {
+      continue;
+    }
 
-      if (typeof parsed.session_id !== "string") {
-        continue;
-      }
+    if (typeof parsed.session_id !== "string") {
+      continue;
+    }
 
-      if (typeof parsed.ts !== "number") {
-        continue;
-      }
+    if (typeof parsed.ts !== "number") {
+      continue;
+    }
 
-      const timestamp = new Date(toMillis(parsed.ts));
-      const current = map.get(parsed.session_id);
-      if (!current || timestamp > current) {
-        map.set(parsed.session_id, timestamp);
-      }
-    } catch (error) {
-      console.warn("Failed to parse history entry", error);
+    const timestamp = new Date(toMillis(parsed.ts));
+    const current = map.get(parsed.session_id);
+    if (!current || timestamp > current) {
+      map.set(parsed.session_id, timestamp);
     }
   }
 
@@ -86,28 +104,20 @@ export const readLatestHistoryEntry =
       crlfDelay: Number.POSITIVE_INFINITY,
     });
 
-    let lastLine: string | null = null;
+    let latestEntry: CodexHistoryEntry | null = null;
     for await (const line of reader) {
       const trimmed = line.trim();
       if (trimmed.length === 0) {
         continue;
       }
-      lastLine = trimmed;
-    }
 
-    if (!lastLine) {
-      return null;
-    }
-
-    try {
-      const parsed = JSON.parse(lastLine) as {
-        session_id?: unknown;
-        ts?: unknown;
-        text?: unknown;
-      };
+      const parsed = parseHistoryLine(trimmed);
+      if (!parsed) {
+        continue;
+      }
 
       if (typeof parsed.session_id !== "string") {
-        return null;
+        continue;
       }
 
       let timestamp: Date | null = null;
@@ -115,13 +125,61 @@ export const readLatestHistoryEntry =
         timestamp = new Date(toMillis(parsed.ts));
       }
 
-      return {
+      latestEntry = {
         sessionId: parsed.session_id,
         timestamp,
         text: typeof parsed.text === "string" ? parsed.text : null,
       } satisfies CodexHistoryEntry;
-    } catch (error) {
-      console.warn("Failed to parse latest history entry", error);
-      return null;
     }
+
+    return latestEntry;
   };
+
+export const removeHistoryEntriesBySessionUuid = async (
+  sessionUuid: string,
+  options?: {
+    historyFilePath?: string;
+  },
+): Promise<{ removedCount: number }> => {
+  const historyFilePath = options?.historyFilePath ?? codexHistoryFilePath;
+  if (!existsSync(historyFilePath)) {
+    return { removedCount: 0 };
+  }
+
+  const raw = await readFile(historyFilePath, "utf-8");
+  const lines = raw.split(/\r?\n/);
+  const keptLines: string[] = [];
+  let removedCount = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) {
+      keptLines.push(line);
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed) as {
+        session_id?: unknown;
+      };
+      if (parsed.session_id === sessionUuid) {
+        removedCount += 1;
+        continue;
+      }
+    } catch {
+      // Keep malformed lines as-is to avoid accidental data loss.
+    }
+
+    keptLines.push(line);
+  }
+
+  if (removedCount === 0) {
+    return { removedCount: 0 };
+  }
+
+  const normalized = keptLines.join("\n").replace(/\n+$/, "");
+  const output = normalized.length > 0 ? `${normalized}\n` : "";
+  await writeFile(historyFilePath, output, "utf-8");
+  clearHistoryCache();
+  return { removedCount };
+};

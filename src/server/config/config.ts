@@ -2,7 +2,7 @@ import z from "zod";
 
 export const configSchema = z.object({
   hideNoUserMessageSession: z.boolean().optional().default(true),
-  unifySameTitleSession: z.boolean().optional().default(true),
+  unifySameTitleSession: z.boolean().optional().default(false),
   enterKeyBehavior: z
     .enum(["shift-enter-send", "enter-send"])
     .optional()

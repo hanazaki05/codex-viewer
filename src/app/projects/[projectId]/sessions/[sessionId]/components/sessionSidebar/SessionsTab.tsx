@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { FC } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatShortDisplayDate } from "@/lib/date/format";
 import { cn } from "@/lib/utils";
 import type { Session } from "../../../../../../../server/service/types";
 import { NewChatModal } from "../../../../components/newChat/NewChatModal";
@@ -139,13 +140,7 @@ export const SessionsTab: FC<{
                   </div>
                   {session.meta.lastModifiedAt && (
                     <span className="text-xs text-sidebar-foreground/60">
-                      {new Date(session.meta.lastModifiedAt).toLocaleDateString(
-                        "en-US",
-                        {
-                          month: "short",
-                          day: "numeric",
-                        },
-                      )}
+                      {formatShortDisplayDate(session.meta.lastModifiedAt)}
                     </span>
                   )}
                 </div>

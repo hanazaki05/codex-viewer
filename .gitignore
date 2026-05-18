@@ -48,3 +48,5 @@ docs/
 
 .easy-sdd/
 .vscode/
+codex-cli/
+.ace-tool/

@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatDisplayDateTime } from "@/lib/date/format";
 import { cn } from "@/lib/utils";
 import type { Project } from "../../../server/service/types";
 import { useProjects } from "../hooks/useProjects";
@@ -191,7 +192,7 @@ export const ProjectList: FC = () => {
                 <p className="text-sm text-muted-foreground">
                   Last modified:{" "}
                   {project.meta.lastSessionAt
-                    ? new Date(project.meta.lastSessionAt).toLocaleString()
+                    ? formatDisplayDateTime(project.meta.lastSessionAt)
                     : ""}
                 </p>
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -226,7 +227,7 @@ export const ProjectList: FC = () => {
             <tbody className="divide-y divide-border">
               {filteredProjects.map((project) => {
                 const lastModified = project.meta.lastSessionAt
-                  ? new Date(project.meta.lastSessionAt).toLocaleString()
+                  ? formatDisplayDateTime(project.meta.lastSessionAt)
                   : "";
 
                 return (

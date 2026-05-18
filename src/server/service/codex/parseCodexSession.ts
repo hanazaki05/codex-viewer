@@ -52,28 +52,84 @@ type EventMessagePayload = {
   message?: unknown;
 };
 
-const filterInstructionTags = (text: string) => {
-  return text
-    .replace(/<user_instructions>[\s\S]*?<\/user_instructions>/gi, "")
-    .replace(/<environment_context>[\s\S]*?<\/environment_context>/gi, "")
-    .replace(/<\/?.*?user_instructions>/gi, "")
-    .replace(/<\/?.*?environment_context>/gi, "")
-    .trim();
+const SYSTEM_BLOCK_PATTERNS = [
+  /<user_instructions>[\s\S]*?<\/user_instructions>/gi,
+  /<apps_instructions>[\s\S]*?<\/apps_instructions>/gi,
+  /<environment_context>[\s\S]*?<\/environment_context>/gi,
+  /<collaboration_mode>[\s\S]*?<\/collaboration_mode>/gi,
+  /<skills_instructions>[\s\S]*?<\/skills_instructions>/gi,
+  /<plugins_instructions>[\s\S]*?<\/plugins_instructions>/gi,
+  /<personality_spec>[\s\S]*?<\/personality_spec>/gi,
+  /<permissions instructions>[\s\S]*?<\/permissions instructions>/gi,
+  /# AGENTS\.md instructions for[^\n]*\n+<INSTRUCTIONS>[\s\S]*?<\/INSTRUCTIONS>/gi,
+  /<INSTRUCTIONS>[\s\S]*?<\/INSTRUCTIONS>/gi,
+];
+
+const DANGLING_SYSTEM_BLOCK_PATTERNS = [
+  /[\s\S]*?<\/user_instructions>/gi,
+  /[\s\S]*?<\/apps_instructions>/gi,
+  /[\s\S]*?<\/environment_context>/gi,
+  /[\s\S]*?<\/collaboration_mode>/gi,
+  /[\s\S]*?<\/skills_instructions>/gi,
+  /[\s\S]*?<\/plugins_instructions>/gi,
+  /[\s\S]*?<\/personality_spec>/gi,
+  /[\s\S]*?<\/permissions instructions>/gi,
+  /[\s\S]*?<\/INSTRUCTIONS>/gi,
+  /<user_instructions>[\s\S]*/gi,
+  /<apps_instructions>[\s\S]*/gi,
+  /<environment_context>[\s\S]*/gi,
+  /<collaboration_mode>[\s\S]*/gi,
+  /<skills_instructions>[\s\S]*/gi,
+  /<plugins_instructions>[\s\S]*/gi,
+  /<personality_spec>[\s\S]*/gi,
+  /<permissions instructions>[\s\S]*/gi,
+  /<INSTRUCTIONS>[\s\S]*/gi,
+];
+
+const normalizeTextBlock = (text: string) => {
+  return text.replace(/\n{3,}/g, "\n\n").trim();
 };
 
-const extractTextFromContent = (content: unknown): string => {
+const extractSystemLabels = (text: string) => {
+  const labels: string[] = [];
+  let visibleText = text;
+
+  for (const pattern of SYSTEM_BLOCK_PATTERNS) {
+    visibleText = visibleText.replace(pattern, (match) => {
+      const normalized = normalizeTextBlock(match);
+      if (normalized.length > 0) {
+        labels.push(normalized);
+      }
+      return "";
+    });
+  }
+
+  for (const pattern of DANGLING_SYSTEM_BLOCK_PATTERNS) {
+    visibleText = visibleText.replace(pattern, "");
+  }
+
+  return {
+    text: normalizeTextBlock(visibleText),
+    labels,
+  };
+};
+
+const extractTextFromContent = (content: unknown) => {
   if (typeof content === "string") {
-    return filterInstructionTags(content);
+    return extractSystemLabels(content);
   }
 
   if (!Array.isArray(content)) {
-    return "";
+    return { text: "", labels: [] as string[] };
   }
 
   const texts: string[] = [];
+  const labels: string[] = [];
   for (const item of content) {
     if (typeof item === "string") {
-      texts.push(filterInstructionTags(item));
+      const extracted = extractSystemLabels(item);
+      texts.push(extracted.text);
+      labels.push(...extracted.labels);
       continue;
     }
     if (typeof item !== "object" || item === null) {
@@ -81,10 +137,18 @@ const extractTextFromContent = (content: unknown): string => {
     }
     const contentItem = item as MessageContentItem;
     if (typeof contentItem.text === "string") {
-      texts.push(filterInstructionTags(contentItem.text));
+      const extracted = extractSystemLabels(contentItem.text);
+      texts.push(extracted.text);
+      labels.push(...extracted.labels);
     }
   }
-  return texts.join("\n\n").trim();
+  return {
+    text: texts
+      .filter((text) => text.length > 0)
+      .join("\n\n")
+      .trim(),
+    labels,
+  };
 };
 
 const createEntryId = (() => {
@@ -142,9 +206,18 @@ export const parseCodexSession = (
   };
 
   const callIdToTurn = new Map<string, CodexSessionTurn>();
+  const extractedSystemLabels: string[] = [];
   const lastMessageText: Record<"user" | "assistant", string | null> = {
     user: null,
     assistant: null,
+  };
+
+  const appendSystemLabels = (labels: string[]) => {
+    for (const label of labels) {
+      if (!extractedSystemLabels.includes(label)) {
+        extractedSystemLabels.push(label);
+      }
+    }
   };
 
   const lines = content
@@ -234,8 +307,9 @@ export const parseCodexSession = (
           const messagePayload = payload as ResponseMessagePayload;
           const role =
             messagePayload.role === "assistant" ? "assistant" : "user";
-          const text = extractTextFromContent(messagePayload.content);
-          const normalized = text.trim();
+          const extracted = extractTextFromContent(messagePayload.content);
+          appendSystemLabels(extracted.labels);
+          const normalized = extracted.text.trim();
 
           if (role === "user") {
             if (normalized.length === 0) {
@@ -411,7 +485,9 @@ export const parseCodexSession = (
               ? payload.message
               : null;
         if (rawText) {
-          const text = filterInstructionTags(rawText);
+          const extracted = extractSystemLabels(rawText);
+          appendSystemLabels(extracted.labels);
+          const text = extracted.text;
           if (!text) {
             continue; // Skip if text is empty after filtering
           }
@@ -444,7 +520,9 @@ export const parseCodexSession = (
               ? payload.message
               : null;
         if (rawText) {
-          const text = filterInstructionTags(rawText);
+          const extracted = extractSystemLabels(rawText);
+          appendSystemLabels(extracted.labels);
+          const text = extracted.text;
           if (!text) {
             continue; // Skip if text is empty after filtering
           }
@@ -546,6 +624,16 @@ export const parseCodexSession = (
         });
       }
     }
+  }
+
+  if (extractedSystemLabels.length > 0) {
+    const combinedInstructions = [
+      sessionMeta.instructions,
+      ...extractedSystemLabels,
+    ].filter((value): value is string => {
+      return typeof value === "string" && value.trim().length > 0;
+    });
+    sessionMeta.instructions = combinedInstructions.join("\n\n");
   }
 
   return {

@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatDisplayDateTime } from "@/lib/date/format";
 import { cn } from "@/lib/utils";
 import type {
   CodexSessionTurn,
@@ -18,7 +19,7 @@ type ToolPair = {
 const formatTimestamp = (timestamp: string | null) => {
   if (!timestamp) return "";
   try {
-    return new Date(timestamp).toLocaleString();
+    return formatDisplayDateTime(timestamp);
   } catch {
     return timestamp;
   }

@@ -39,7 +39,7 @@ export default async function RootLayout({
   });
 
   return (
-    <html lang="ja">
+    <html lang="zh-CN">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

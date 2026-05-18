@@ -9,9 +9,11 @@ import {
   GitCompareIcon,
   LoaderIcon,
   MenuIcon,
+  Trash2Icon,
   XIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { FC } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -27,14 +29,19 @@ import { useSession } from "../hooks/useSession";
 import { ConversationList } from "./conversationList/ConversationList";
 import { DiffModal } from "./diffModal";
 import { ResumeChat } from "./resumeChat/ResumeChat";
+import { getNextSessionRoute } from "./sessionNavigation";
+import { DeleteSessionDialog } from "./sessionSidebar/DeleteSessionDialog";
 import { SessionSidebar } from "./sessionSidebar/SessionSidebar";
 
 export const SessionPageContent: FC<{
   projectId: string;
   sessionId: string;
 }> = ({ projectId, sessionId }) => {
+  const router = useRouter();
   const { session, turns, sessionMeta } = useSession(projectId, sessionId);
-  const { data: project } = useProject(projectId);
+  const {
+    data: { project, sessions },
+  } = useProject(projectId);
 
   const abortTask = useMutation({
     mutationFn: async (sessionId: string) => {
@@ -61,8 +68,19 @@ export const SessionPageContent: FC<{
   const [previousTurnLength, setPreviousTurnLength] = useState(0);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const hasInitialScrollRef = useRef(false);
+  const sessionTitle =
+    session.meta.firstCommand !== null
+      ? firstCommandToTitle(session.meta.firstCommand)
+      : sessionId;
+  const isDeleteDisabled = isRunningTask || isPausedTask;
+  const deleteDisabledReason = isRunningTask
+    ? "Cannot delete while a conversation is running."
+    : isPausedTask
+      ? "Cannot delete while Codex is waiting for your input."
+      : null;
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     const container = scrollContainerRef.current;
@@ -132,14 +150,12 @@ export const SessionPageContent: FC<{
                 <MenuIcon className="w-4 h-4" />
               </Button>
               <h1 className="text-lg sm:text-2xl md:text-3xl font-bold break-all overflow-ellipsis line-clamp-1 px-1 sm:px-5 min-w-0">
-                {session.meta.firstCommand !== null
-                  ? firstCommandToTitle(session.meta.firstCommand)
-                  : sessionId}
+                {sessionTitle}
               </h1>
             </div>
 
             <div className="px-1 sm:px-5 flex flex-wrap items-center gap-1 sm:gap-2">
-              {project?.project.workspacePath && (
+              {project.workspacePath && (
                 <Link
                   href={`/projects/${projectId}`}
                   target="_blank"
@@ -150,7 +166,7 @@ export const SessionPageContent: FC<{
                     className="h-6 sm:h-8 text-xs sm:text-sm flex items-center hover:bg-blue-50/60 hover:border-blue-300/60 hover:shadow-sm transition-all duration-200 cursor-pointer"
                   >
                     <ExternalLinkIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                    {project.project.meta.workspacePath}
+                    {project.meta.workspacePath}
                   </Badge>
                 </Link>
               )}
@@ -175,6 +191,20 @@ export const SessionPageContent: FC<{
                   aria-label="セッションIDをコピー"
                 >
                   <CopyIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
+                  disabled={isDeleteDisabled}
+                  onClick={() => {
+                    setIsDeleteDialogOpen(true);
+                  }}
+                  aria-label="Delete session"
+                  title={deleteDisabledReason ?? "Delete session"}
+                >
+                  <Trash2Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
               </div>
             </div>
@@ -283,6 +313,23 @@ export const SessionPageContent: FC<{
         isOpen={isDiffModalOpen}
         onOpenChange={setIsDiffModalOpen}
       />
+      <DeleteSessionDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        projectId={projectId}
+        sessionId={sessionId}
+        sessionTitle={sessionTitle}
+        deletionDisabledReason={deleteDisabledReason}
+        onSuccess={() => {
+          router.replace(
+            getNextSessionRoute({
+              currentSessionId: sessionId,
+              projectId,
+              sessions,
+            }),
+          );
+        }}
+      />
     </div>
   );
 };
@@ -304,12 +351,12 @@ const SessionMetaSummary = ({
       {hasInstructions ? (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Session Instructions</CardTitle>
+            <CardTitle className="text-base">System Labels</CardTitle>
           </CardHeader>
           <CardContent>
             <details className="whitespace-pre-wrap break-words text-sm font-mono">
               <summary className="cursor-pointer text-sm text-muted-foreground">
-                Show instructions
+                Show system labels
               </summary>
               <pre className="mt-2 whitespace-pre-wrap break-words text-sm font-mono">
                 {instructions}

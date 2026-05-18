@@ -61,6 +61,18 @@ export class CodexTaskController {
     return this.aliveTasks.map((task) => this.serializeTask(task));
   }
 
+  public hasAliveTask(
+    sessionPathId: string,
+    sessionUuid?: string | null,
+  ): boolean {
+    return this.aliveTasks.some((task) => {
+      if (sessionUuid && task.sessionUuid === sessionUuid) {
+        return true;
+      }
+      return task.sessionPathId === sessionPathId;
+    });
+  }
+
   private findTask(
     sessionUuid?: string,
     sessionPathId?: string,
