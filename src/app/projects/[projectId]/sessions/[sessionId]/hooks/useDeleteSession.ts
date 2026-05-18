@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { projetsQueryConfig } from "../../../../hooks/useProjects";
 import { projectQueryConfig } from "../../../hooks/useProject";
 
 type DeleteSessionParams = {
   projectId: string;
   sessionId: string;
+  deleteProject?: boolean;
 };
 
 const getDeleteErrorMessage = async (response: Response) => {
@@ -34,13 +36,21 @@ export const useDeleteSession = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ projectId, sessionId }: DeleteSessionParams) => {
+    mutationFn: async ({
+      projectId,
+      sessionId,
+      deleteProject = false,
+    }: DeleteSessionParams) => {
       const response = await fetch(
         `/api/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(
           sessionId,
         )}`,
         {
           method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ deleteProject }),
         },
       );
 
@@ -48,12 +58,18 @@ export const useDeleteSession = () => {
         throw new Error(await getDeleteErrorMessage(response));
       }
 
-      return response.json() as Promise<{ success: true }>;
+      return response.json() as Promise<{
+        success: true;
+        deletedProject: boolean;
+      }>;
     },
     onSuccess: async (_, { projectId, sessionId }) => {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: projectQueryConfig(projectId).queryKey,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: projetsQueryConfig.queryKey,
         }),
         queryClient.invalidateQueries({ queryKey: ["sessions"] }),
         queryClient.invalidateQueries({ queryKey: ["sessions", sessionId] }),

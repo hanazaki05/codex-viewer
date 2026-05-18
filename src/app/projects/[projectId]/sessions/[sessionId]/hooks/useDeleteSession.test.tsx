@@ -57,6 +57,10 @@ describe("useDeleteSession", () => {
       "/api/projects/project-123/sessions/session-456",
       {
         method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ deleteProject: false }),
       },
     );
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
@@ -68,6 +72,46 @@ describe("useDeleteSession", () => {
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: ["sessions", sessionId],
     });
+  });
+
+  it("passes the project deletion flag", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ success: true, deletedProject: true }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    const { result } = renderHook(() => useDeleteSession(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        projectId: "project-123",
+        sessionId: "session-456",
+        deleteProject: true,
+      });
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/projects/project-123/sessions/session-456",
+      {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ deleteProject: true }),
+      },
+    );
   });
 
   it("surfaces backend conflict errors for active sessions", async () => {

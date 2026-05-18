@@ -145,9 +145,27 @@ export const routes = (app: HonoAppType) => {
         const { projectId, sessionId } = c.req.param();
 
         try {
-          const result = await deleteSession(projectId, sessionId, {
-            taskController,
-          });
+          const body = await c.req.json().catch(() => ({}));
+          const parsedBody = z
+            .object({
+              deleteProject: z.boolean().optional().default(false),
+            })
+            .safeParse(body);
+
+          if (!parsedBody.success) {
+            return c.json({ error: "Invalid delete session request" }, 400);
+          }
+
+          const result = await deleteSession(
+            projectId,
+            sessionId,
+            {
+              taskController,
+            },
+            {
+              deleteProject: parsedBody.data.deleteProject,
+            },
+          );
           return c.json(result);
         } catch (error) {
           if (error instanceof DeleteSessionError) {

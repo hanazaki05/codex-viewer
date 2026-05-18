@@ -1,9 +1,10 @@
 import type { Dirent } from "node:fs";
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 
 import { codexSessionsRootPath } from "../paths";
+import { getProjectDisplayName } from "../project/standalone";
 import { getHistoryTimestamps } from "./history";
 
 export type CodexSessionHeader = {
@@ -89,10 +90,10 @@ export const readSessionHeader = async (
   }
 };
 
-export const listCodexSessionRecords = async (): Promise<
-  CodexSessionRecord[]
-> => {
-  const root = codexSessionsRootPath;
+export const listCodexSessionRecords = async (options?: {
+  rootPath?: string;
+}): Promise<CodexSessionRecord[]> => {
+  const root = options?.rootPath ?? codexSessionsRootPath;
   const records: CodexSessionRecord[] = [];
   const sessionUuidMap = new Map<string, CodexSessionRecord>();
 
@@ -167,13 +168,16 @@ export const listCodexSessionRecords = async (): Promise<
   return records;
 };
 
-export const listSessionsForWorkspace = async (workspacePath: string) => {
-  const records = await listCodexSessionRecords();
+export const listSessionsForWorkspace = async (
+  workspacePath: string,
+  options?: { rootPath?: string },
+) => {
+  const records = await listCodexSessionRecords(options);
   return records.filter((record) => record.workspacePath === workspacePath);
 };
 
 export const getWorkspaceName = (workspacePath: string) => {
-  return basename(workspacePath);
+  return getProjectDisplayName(workspacePath);
 };
 
 export const findSessionRecordByUuid = async (

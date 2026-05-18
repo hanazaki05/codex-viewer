@@ -319,8 +319,16 @@ export const SessionPageContent: FC<{
         projectId={projectId}
         sessionId={sessionId}
         sessionTitle={sessionTitle}
+        projectName={project.meta.workspaceName}
+        projectPath={project.meta.workspacePath}
+        isLastSessionInProject={project.meta.sessionCount === 1}
         deletionDisabledReason={deleteDisabledReason}
-        onSuccess={() => {
+        onSuccess={({ deletedProject }) => {
+          if (deletedProject) {
+            router.replace("/projects");
+            return;
+          }
+
           router.replace(
             getNextSessionRoute({
               currentSessionId: sessionId,

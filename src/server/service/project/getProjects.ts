@@ -4,6 +4,7 @@ import {
 } from "../codex/sessionFiles";
 import type { Project } from "../types";
 import { encodeProjectId } from "./id";
+import { isStandaloneProjectPath } from "./standalone";
 
 export const getProjects = async (): Promise<{ projects: Project[] }> => {
   const records = await listCodexSessionRecords();
@@ -39,6 +40,7 @@ export const getProjects = async (): Promise<{ projects: Project[] }> => {
         meta: {
           workspaceName: getWorkspaceName(workspacePath),
           workspacePath,
+          isStandalone: isStandaloneProjectPath(workspacePath),
           lastSessionAt,
           sessionCount: sessions.length,
         },

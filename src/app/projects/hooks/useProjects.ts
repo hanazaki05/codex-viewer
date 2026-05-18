@@ -8,6 +8,7 @@ type ProjectResponse = {
   meta: {
     workspaceName: string;
     workspacePath: string;
+    isStandalone: boolean;
     lastSessionAt: string | null;
     sessionCount: number;
   };

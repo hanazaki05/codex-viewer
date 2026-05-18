@@ -109,6 +109,7 @@ export type Project = {
 export type ProjectMeta = {
   workspaceName: string;
   workspacePath: string;
+  isStandalone: boolean;
   lastSessionAt: Date | null;
   sessionCount: number;
 };

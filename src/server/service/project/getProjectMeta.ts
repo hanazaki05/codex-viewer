@@ -3,6 +3,7 @@ import {
   listSessionsForWorkspace,
 } from "../codex/sessionFiles";
 import type { ProjectMeta } from "../types";
+import { isStandaloneProjectPath } from "./standalone";
 
 export const getProjectMeta = async (
   workspacePath: string,
@@ -20,6 +21,7 @@ export const getProjectMeta = async (
   const projectMeta: ProjectMeta = {
     workspaceName: getWorkspaceName(workspacePath),
     workspacePath,
+    isStandalone: isStandaloneProjectPath(workspacePath),
     lastSessionAt,
     sessionCount: sessions.length,
   };

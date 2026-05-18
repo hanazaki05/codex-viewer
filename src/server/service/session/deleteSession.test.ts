@@ -9,13 +9,13 @@ import { encodeSessionId } from "./id";
 
 const tempDirs: string[] = [];
 
-const createFixture = async () => {
+const createFixture = async (options?: { workspacePath?: string }) => {
   const rootDir = await mkdtemp(join(tmpdir(), "codex-viewer-delete-session-"));
   tempDirs.push(rootDir);
 
   const sessionsRootPath = join(rootDir, "sessions");
   const sessionDir = join(sessionsRootPath, "2026", "04", "07");
-  const workspacePath = join(rootDir, "workspace");
+  const workspacePath = options?.workspacePath ?? join(rootDir, "workspace");
   const sessionUuid = "session-uuid-123";
   const sessionPath = join(sessionDir, "session.jsonl");
   const historyFilePath = join(rootDir, "history.jsonl");
@@ -95,7 +95,7 @@ describe("deleteSession", () => {
       historyFilePath: fixture.historyFilePath,
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, deletedProject: false });
     expect(existsSync(fixture.sessionPath)).toBe(false);
 
     const history = await readFile(fixture.historyFilePath, "utf-8");
@@ -118,6 +118,104 @@ describe("deleteSession", () => {
         fileEventType: "rename",
       },
     });
+  });
+
+  it("deletes a project directory when requested for the last session", async () => {
+    const fixture = await createFixture();
+    const emit = vi.fn();
+
+    const result = await deleteSession(
+      fixture.projectId,
+      fixture.sessionId,
+      {
+        taskController: {
+          hasAliveTask: () => false,
+        },
+        eventBus: {
+          emit,
+        },
+        sessionsRootPath: fixture.sessionsRootPath,
+        historyFilePath: fixture.historyFilePath,
+      },
+      { deleteProject: true },
+    );
+
+    expect(result).toEqual({ success: true, deletedProject: true });
+    expect(existsSync(fixture.sessionPath)).toBe(false);
+    expect(existsSync(fixture.workspacePath)).toBe(false);
+  });
+
+  it("rejects project deletion when the project directory is missing", async () => {
+    const fixture = await createFixture();
+    await rm(fixture.workspacePath, { recursive: true, force: true });
+
+    await expect(
+      deleteSession(
+        fixture.projectId,
+        fixture.sessionId,
+        {
+          taskController: {
+            hasAliveTask: () => false,
+          },
+          sessionsRootPath: fixture.sessionsRootPath,
+          historyFilePath: fixture.historyFilePath,
+        },
+        { deleteProject: true },
+      ),
+    ).rejects.toMatchObject({
+      status: 404,
+      message: "Project directory not found",
+    });
+
+    expect(existsSync(fixture.sessionPath)).toBe(true);
+  });
+
+  it("rejects project deletion when the project has other sessions", async () => {
+    const fixture = await createFixture();
+    const secondSessionPath = join(
+      fixture.sessionsRootPath,
+      "2026",
+      "04",
+      "08",
+      "second.jsonl",
+    );
+    await mkdir(join(fixture.sessionsRootPath, "2026", "04", "08"), {
+      recursive: true,
+    });
+    await writeFile(
+      secondSessionPath,
+      JSON.stringify({
+        type: "session_meta",
+        payload: {
+          id: "second-session",
+          cwd: fixture.workspacePath,
+          timestamp: "2026-04-08T00:00:00.000Z",
+        },
+      }),
+      "utf-8",
+    );
+
+    await expect(
+      deleteSession(
+        fixture.projectId,
+        fixture.sessionId,
+        {
+          taskController: {
+            hasAliveTask: () => false,
+          },
+          sessionsRootPath: fixture.sessionsRootPath,
+          historyFilePath: fixture.historyFilePath,
+        },
+        { deleteProject: true },
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "Project can only be deleted when this is its last session",
+    });
+
+    expect(existsSync(fixture.sessionPath)).toBe(true);
+    expect(existsSync(secondSessionPath)).toBe(true);
+    expect(existsSync(fixture.workspacePath)).toBe(true);
   });
 
   it("rejects deletion for running or waiting sessions", async () => {
