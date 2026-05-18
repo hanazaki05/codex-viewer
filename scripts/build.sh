@@ -2,12 +2,10 @@
 
 set -euxo pipefail
 
-if [ -d "dist/.next" ]; then
-  rm -rf dist/.next
-fi
+rm -rf dist/.next dist/standalone
 
 pnpm exec next build
-cp -r public .next/standalone/
-cp -r .next/static .next/standalone/.next/
+cp -R public .next/standalone/
+cp -R .next/static .next/standalone/.next/
 
-cp -r .next/standalone ./dist/
+cp -R .next/standalone ./dist/
