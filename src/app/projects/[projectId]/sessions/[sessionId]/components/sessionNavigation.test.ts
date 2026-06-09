@@ -8,6 +8,7 @@ const createSession = (id: string): Session => {
     sessionUuid: null,
     jsonlFilePath: `/tmp/${id}.jsonl`,
     meta: {
+      title: null,
       messageCount: 1,
       firstCommand: {
         kind: "text",

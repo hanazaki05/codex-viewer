@@ -122,6 +122,7 @@ export type Session = {
 };
 
 export type SessionMeta = {
+  title: string | null;
   messageCount: number;
   firstCommand: ParsedCommand | null;
   lastModifiedAt: string | null;

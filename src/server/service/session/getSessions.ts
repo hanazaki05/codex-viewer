@@ -1,4 +1,5 @@
 import { listSessionsForWorkspace } from "../codex/sessionFiles";
+import { getCodexThreadTitles } from "../codex/threadStore";
 import { decodeProjectId } from "../project/id";
 import type { Session } from "../types";
 import { getSessionMeta } from "./getSessionMeta";
@@ -20,9 +21,24 @@ export const getSessions = async (
 export const getSessionsFromRecords = async (
   sessionRecords: Awaited<ReturnType<typeof listSessionsForWorkspace>>,
 ): Promise<{ sessions: Session[] }> => {
+  const titles = await getCodexThreadTitles({
+    sessions: sessionRecords.map((record) => ({
+      sessionUuid: record.sessionUuid,
+      rolloutPath: record.filePath,
+    })),
+  });
+
   const sessions = await Promise.all(
     sessionRecords.map(async (record): Promise<Session> => {
-      const meta = await getSessionMeta(record.filePath);
+      const meta = await getSessionMeta(record.filePath, {
+        includeTitle: false,
+      });
+      meta.title =
+        (record.sessionUuid
+          ? (titles.get(record.sessionUuid) ?? null)
+          : null) ??
+        titles.get(record.filePath) ??
+        meta.title;
       return {
         id: encodeSessionId(record.filePath),
         sessionUuid: record.sessionUuid,

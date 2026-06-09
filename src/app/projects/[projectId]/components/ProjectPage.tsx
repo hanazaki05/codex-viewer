@@ -28,7 +28,7 @@ import {
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/date/format";
 import { useConfig } from "../../../hooks/useConfig";
 import { projectQueryConfig, useProject } from "../hooks/useProject";
-import { firstCommandToTitle } from "../services/firstCommandToTitle";
+import { sessionToTitle } from "../services/firstCommandToTitle";
 import { NewChatModal } from "./newChat/NewChatModal";
 
 export const ProjectPageContent = ({ projectId }: { projectId: string }) => {
@@ -149,9 +149,10 @@ export const ProjectPageContent = ({ projectId }: { projectId: string }) => {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <span className="break-words overflow-ellipsis line-clamp-2 text-lg sm:text-xl">
-                        {session.meta.firstCommand !== null
-                          ? firstCommandToTitle(session.meta.firstCommand)
-                          : (session.sessionUuid ?? session.id)}
+                        {sessionToTitle(
+                          session,
+                          session.sessionUuid ?? session.id,
+                        )}
                       </span>
                     </CardTitle>
                     <CardDescription className="font-mono text-xs">

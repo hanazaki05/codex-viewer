@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
+import { sessionToTitle } from "../../lib/sessionTitle";
 import { configSchema } from "../config/config";
 import { CodexTaskController } from "../service/codex/CodexTaskController";
 import {
@@ -94,24 +95,7 @@ export const routes = (app: HonoAppType) => {
 
               for (const session of filteredSessions) {
                 // Generate title for comparison
-                const title =
-                  session.meta.firstCommand !== null
-                    ? (() => {
-                        const cmd = session.meta.firstCommand;
-                        switch (cmd.kind) {
-                          case "command":
-                            return cmd.commandArgs === undefined
-                              ? cmd.commandName
-                              : `${cmd.commandName} ${cmd.commandArgs}`;
-                          case "local-command":
-                            return cmd.stdout;
-                          case "text":
-                            return cmd.content;
-                          default:
-                            return session.id;
-                        }
-                      })()
-                    : session.id;
+                const title = sessionToTitle(session, session.id);
 
                 const existingSession = sessionMap.get(title);
                 if (existingSession) {

@@ -23,7 +23,7 @@ import { useTaskNotifications } from "@/hooks/useTaskNotifications";
 import { Badge } from "../../../../../../components/ui/badge";
 import { honoClient } from "../../../../../../lib/api/client";
 import { useProject } from "../../../hooks/useProject";
-import { firstCommandToTitle } from "../../../services/firstCommandToTitle";
+import { sessionToTitle } from "../../../services/firstCommandToTitle";
 import { useAliveTask } from "../hooks/useAliveTask";
 import { useSession } from "../hooks/useSession";
 import { ConversationList } from "./conversationList/ConversationList";
@@ -68,10 +68,7 @@ export const SessionPageContent: FC<{
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const hasInitialScrollRef = useRef(false);
-  const sessionTitle =
-    session.meta.firstCommand !== null
-      ? firstCommandToTitle(session.meta.firstCommand)
-      : sessionId;
+  const sessionTitle = sessionToTitle(session, sessionId);
   const isDeleteDisabled = isRunningTask || isPausedTask;
   const deleteDisabledReason = isRunningTask
     ? "Cannot delete while a conversation is running."

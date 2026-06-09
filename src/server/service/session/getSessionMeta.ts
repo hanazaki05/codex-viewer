@@ -7,6 +7,7 @@ import {
   extractTextFromContent,
   type parseCodexSession,
 } from "../codex/parseCodexSession";
+import { getCodexThreadTitle } from "../codex/threadStore";
 import type { ParsedCommand } from "../parseCommandXml";
 import type { SessionMeta } from "../types";
 
@@ -33,6 +34,7 @@ type EventMessagePayload = {
 type SessionMetaCacheEntry = {
   mtimeMs: number;
   size: number;
+  sessionUuid: string | null;
   meta: SessionMeta;
 };
 
@@ -83,7 +85,13 @@ export const getSessionMetaFromParsed = async (
     console.warn(`Failed to stat session file ${jsonlFilePath}`, error);
   }
 
+  const title = await getCodexThreadTitle({
+    sessionUuid: parsed.sessionMeta.sessionUuid,
+    rolloutPath: jsonlFilePath,
+  });
+
   return {
+    title,
     messageCount: parsed.entries.length,
     firstCommand: getFirstCommandFromParsedSession(parsed),
     lastModifiedAt: stats?.mtime ? stats.mtime.toISOString() : null,
@@ -104,6 +112,7 @@ const createFastSessionMetaReader = () => {
   let messageCount = 0;
   let firstUserMessage: string | null = null;
   let sessionInstructions: string | null = null;
+  let sessionUuid: string | null = null;
   const extractedSystemLabels: string[] = [];
   const lastMessageText: Record<"user" | "assistant", string | null> = {
     user: null,
@@ -267,11 +276,16 @@ const createFastSessionMetaReader = () => {
 
     if (parsed.type === "session_meta") {
       if (parsed.payload && typeof parsed.payload === "object") {
-        const instructionsValue = (
-          parsed.payload as Partial<{ instructions: unknown }>
-        ).instructions;
+        const payload = parsed.payload as Partial<{
+          id: unknown;
+          instructions: unknown;
+        }>;
+        const instructionsValue = payload.instructions;
         if (typeof instructionsValue === "string") {
           sessionInstructions = instructionsValue;
+        }
+        if (typeof payload.id === "string" && payload.id.trim().length > 0) {
+          sessionUuid = payload.id;
         }
       }
       return;
@@ -340,8 +354,12 @@ const createFastSessionMetaReader = () => {
 
   return {
     readLine,
-    getMeta: (stats: Awaited<ReturnType<typeof stat>> | undefined) => {
+    getSessionUuid: () => sessionUuid,
+    getMeta: (
+      stats: Awaited<ReturnType<typeof stat>> | undefined,
+    ): SessionMeta => {
       return {
+        title: null,
         messageCount,
         firstCommand: getFirstCommand(),
         lastModifiedAt: stats?.mtime ? stats.mtime.toISOString() : null,
@@ -353,7 +371,9 @@ const createFastSessionMetaReader = () => {
 
 export const getSessionMeta = async (
   jsonlFilePath: string,
+  options: { includeTitle?: boolean } = {},
 ): Promise<SessionMeta> => {
+  const includeTitle = options.includeTitle ?? true;
   let stats: Awaited<ReturnType<typeof stat>> | undefined;
   try {
     stats = await stat(jsonlFilePath);
@@ -366,7 +386,14 @@ export const getSessionMeta = async (
     const size = Number(stats.size);
     const cached = sessionMetaCache.get(jsonlFilePath);
     if (cached && cached.mtimeMs === mtimeMs && cached.size === size) {
-      return cloneSessionMeta(cached.meta);
+      const cachedMeta = cloneSessionMeta(cached.meta);
+      if (includeTitle) {
+        cachedMeta.title = await getCodexThreadTitle({
+          sessionUuid: cached.sessionUuid,
+          rolloutPath: jsonlFilePath,
+        });
+      }
+      return cachedMeta;
     }
   }
 
@@ -388,13 +415,22 @@ export const getSessionMeta = async (
   }
 
   const sessionMeta = reader.getMeta(stats);
+  if (includeTitle) {
+    sessionMeta.title = await getCodexThreadTitle({
+      sessionUuid: reader.getSessionUuid(),
+      rolloutPath: jsonlFilePath,
+    });
+  }
   if (stats) {
     const mtimeMs = Number(stats.mtimeMs);
     const size = Number(stats.size);
+    const cachedMeta = cloneSessionMeta(sessionMeta);
+    cachedMeta.title = null;
     sessionMetaCache.set(jsonlFilePath, {
       mtimeMs,
       size,
-      meta: cloneSessionMeta(sessionMeta),
+      sessionUuid: reader.getSessionUuid(),
+      meta: cachedMeta,
     });
   }
   return sessionMeta;

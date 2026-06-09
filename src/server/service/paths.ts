@@ -7,3 +7,4 @@ export const codexHistoryFilePath = resolve(
   ".codex",
   "history.jsonl",
 );
+export const codexStateDbPath = resolve(homedir(), ".codex", "state_5.sqlite");

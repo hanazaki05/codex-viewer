@@ -10,7 +10,7 @@ import { formatShortDisplayDate } from "@/lib/date/format";
 import { cn } from "@/lib/utils";
 import type { Session } from "../../../../../../../server/service/types";
 import { NewChatModal } from "../../../../components/newChat/NewChatModal";
-import { firstCommandToTitle } from "../../../../services/firstCommandToTitle";
+import { sessionToTitle } from "../../../../services/firstCommandToTitle";
 import { aliveTasksAtom } from "../../store/aliveTasksAtom";
 
 export const SessionsTab: FC<{
@@ -86,10 +86,7 @@ export const SessionsTab: FC<{
       <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
         {sortedSessions.map((session) => {
           const isActive = session.id === currentSessionId;
-          const title =
-            session.meta.firstCommand !== null
-              ? firstCommandToTitle(session.meta.firstCommand)
-              : session.id;
+          const title = sessionToTitle(session, session.id);
 
           const aliveTask = aliveTasks.find((task) => {
             if (
