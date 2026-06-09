@@ -11,6 +11,8 @@
       "**",
       "!**/*.generated.*",
       "!.next",
+      "!.ace-tool",
+      "!codex-cli",
       "!src/lib/$path.ts",
       "!**/*.css",
       "!dist"

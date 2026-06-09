@@ -140,11 +140,20 @@ const createFastSessionMetaReader = () => {
     }
   };
 
+  const isConversationRole = (role: unknown): role is "assistant" | "user" => {
+    return role === "assistant" || role === "user";
+  };
+
   const handleResponseMessage = (payload: ResponseMessagePayload) => {
-    const role = payload.role === "assistant" ? "assistant" : "user";
     const extracted = extractTextFromContent(payload.content);
     appendSystemLabels(extracted.labels);
     const normalized = extracted.text.trim();
+    if (!isConversationRole(payload.role)) {
+      appendSystemLabels(normalized.length > 0 ? [normalized] : []);
+      return;
+    }
+
+    const role = payload.role;
 
     if (role === "user" && normalized.length === 0) {
       if (!hasCurrentTurn || currentTurnUserText !== null) {

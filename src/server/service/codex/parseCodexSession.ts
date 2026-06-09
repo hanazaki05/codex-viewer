@@ -92,6 +92,7 @@ const MEMORY_INSTRUCTION_INTRO_PATTERN =
 const MEMORY_INSTRUCTION_END_PATTERNS = [
   /Do not try to edit the memory files yourself, only add one update note in[^\n]*(?:\n\/[^\n]*)?/i,
   /Do not present unverified memory-derived facts as confirmed-current\./i,
+  /Decision boundary: should you use memory for a new user query\?\s*/i,
   /========= MEMORY_SUMMARY ENDS =========/i,
 ];
 
@@ -124,6 +125,10 @@ const normalizeTextBlock = (text: string) => {
   return text.replace(/\n{3,}/g, "\n\n").trim();
 };
 
+const isConversationRole = (role: unknown): role is "assistant" | "user" => {
+  return role === "assistant" || role === "user";
+};
+
 const extractLeadingMemoryInstructions = (text: string) => {
   const introMatch = MEMORY_INSTRUCTION_INTRO_PATTERN.exec(text);
   if (!introMatch) {
@@ -134,8 +139,7 @@ const extractLeadingMemoryInstructions = (text: string) => {
   for (const pattern of MEMORY_INSTRUCTION_END_PATTERNS) {
     const match = pattern.exec(text);
     if (match) {
-      endIndex = match.index + match[0].length;
-      break;
+      endIndex = Math.max(endIndex, match.index + match[0].length);
     }
   }
 
@@ -384,11 +388,15 @@ export const parseCodexSession = (
       switch ((payload as { type?: unknown }).type) {
         case "message": {
           const messagePayload = payload as ResponseMessagePayload;
-          const role =
-            messagePayload.role === "assistant" ? "assistant" : "user";
           const extracted = extractTextFromContent(messagePayload.content);
           appendSystemLabels(extracted.labels);
           const normalized = extracted.text.trim();
+          if (!isConversationRole(messagePayload.role)) {
+            appendSystemLabels(normalized.length > 0 ? [normalized] : []);
+            break;
+          }
+
+          const role = messagePayload.role;
 
           if (role === "user") {
             if (normalized.length === 0) {

@@ -128,4 +128,163 @@ describe("parseCodexSession", () => {
       "Do not present unverified memory-derived facts as confirmed-current.",
     );
   });
+
+  it("moves short injected memory headers into session meta", () => {
+    const content = [
+      JSON.stringify({
+        timestamp: "2026-06-10T10:00:00.000Z",
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [
+            {
+              text: [
+                "## Memory",
+                "",
+                "You have access to a memory folder with guidance from prior runs. It can save",
+                "time and help you stay consistent. Use it whenever it is likely to help.",
+                "",
+                "Decision boundary: should you use memory for a new user query? ",
+                "",
+                "为啥这个玩应开头的那个消息还是没有过滤掉 本地起个实例测试一下",
+              ].join("\n"),
+            },
+          ],
+        },
+      }),
+    ].join("\n");
+
+    const parsed = parseCodexSession(content);
+
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.entries[0]).toMatchObject({
+      type: "user",
+      text: "为啥这个玩应开头的那个消息还是没有过滤掉 本地起个实例测试一下",
+    });
+    expect(parsed.sessionMeta.instructions).toContain("## Memory");
+    expect(parsed.sessionMeta.instructions).toContain("Decision boundary");
+  });
+
+  it("moves full memory summaries into session meta before the user message", () => {
+    const content = [
+      JSON.stringify({
+        timestamp: "2026-06-10T10:00:00.000Z",
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [
+            {
+              text: [
+                "# AGENTS.md instructions for /workspace",
+                "",
+                "<INSTRUCTIONS>",
+                "use rg",
+                "</INSTRUCTIONS>",
+                "<environment_context>",
+                "cwd=/workspace",
+                "</environment_context>",
+                "## Memory",
+                "",
+                "You have access to a memory folder with guidance from prior runs. It can save",
+                "time and help you stay consistent. Use it whenever it is likely to help.",
+                "",
+                "Decision boundary: should you use memory for a new user query?",
+                "",
+                "Do not present unverified memory-derived facts as confirmed-current.",
+                "",
+                "========= MEMORY_SUMMARY BEGINS =========",
+                "v1",
+                "",
+                "## User Profile",
+                "",
+                "Prior-run guidance that should not render as user text.",
+                "========= MEMORY_SUMMARY ENDS =========",
+                "",
+                "为啥这个玩应开头的那个消息还是没有过滤掉 本地起个实例测试一下",
+              ].join("\n"),
+            },
+          ],
+        },
+      }),
+    ].join("\n");
+
+    const parsed = parseCodexSession(content);
+
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.entries[0]).toMatchObject({
+      type: "user",
+      text: "为啥这个玩应开头的那个消息还是没有过滤掉 本地起个实例测试一下",
+    });
+    expect(parsed.sessionMeta.instructions).toContain("## Memory");
+    expect(parsed.sessionMeta.instructions).toContain(
+      "========= MEMORY_SUMMARY ENDS =========",
+    );
+    expect(parsed.entries[0]?.type).toBe("user");
+    if (parsed.entries[0]?.type === "user") {
+      expect(parsed.entries[0].text).not.toContain("## User Profile");
+    }
+  });
+
+  it("does not render developer response messages as user turns", () => {
+    const content = [
+      JSON.stringify({
+        timestamp: "2026-06-10T10:00:00.000Z",
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "developer",
+          content: [
+            {
+              text: [
+                "<permissions instructions>",
+                "read-only sandbox",
+                "</permissions instructions>",
+              ].join("\n"),
+            },
+            {
+              text: [
+                "## Memory",
+                "",
+                "You have access to a memory folder with guidance from prior runs. It can save",
+                "time and help you stay consistent. Use it whenever it is likely to help.",
+                "",
+                "========= MEMORY_SUMMARY BEGINS =========",
+                "v1",
+                "========= MEMORY_SUMMARY ENDS =========",
+                "",
+                "When memory is likely relevant, start with the quick memory pass above before",
+                "deep repo exploration.",
+              ].join("\n"),
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        timestamp: "2026-06-10T10:00:01.000Z",
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [{ text: "继续" }],
+        },
+      }),
+    ].join("\n");
+
+    const parsed = parseCodexSession(content);
+
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.entries[0]).toMatchObject({
+      type: "user",
+      text: "继续",
+    });
+    expect(parsed.sessionMeta.instructions).toContain(
+      "<permissions instructions>",
+    );
+    expect(parsed.sessionMeta.instructions).toContain("## Memory");
+    expect(parsed.sessionMeta.instructions).toContain(
+      "When memory is likely relevant",
+    );
+  });
 });
