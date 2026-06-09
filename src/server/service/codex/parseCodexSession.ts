@@ -86,13 +86,49 @@ const DANGLING_SYSTEM_BLOCK_PATTERNS = [
   /<INSTRUCTIONS>[\s\S]*/gi,
 ];
 
+const MEMORY_INSTRUCTION_INTRO_PATTERN =
+  /^\s*## Memory\s*\n+You have access to a memory folder with guidance from prior runs\. It can save\s+time and help you stay consistent\. Use it whenever it is likely to help\./i;
+
+const MEMORY_INSTRUCTION_END_PATTERNS = [
+  /Do not try to edit the memory files yourself, only add one update note in[^\n]*(?:\n\/[^\n]*)?/i,
+  /Do not present unverified memory-derived facts as confirmed-current\./i,
+  /========= MEMORY_SUMMARY ENDS =========/i,
+];
+
 const normalizeTextBlock = (text: string) => {
   return text.replace(/\n{3,}/g, "\n\n").trim();
+};
+
+const extractLeadingMemoryInstructions = (text: string) => {
+  const introMatch = MEMORY_INSTRUCTION_INTRO_PATTERN.exec(text);
+  if (!introMatch) {
+    return { text, labels: [] as string[] };
+  }
+
+  let endIndex = introMatch[0].length;
+  for (const pattern of MEMORY_INSTRUCTION_END_PATTERNS) {
+    const match = pattern.exec(text);
+    if (match) {
+      endIndex = match.index + match[0].length;
+      break;
+    }
+  }
+
+  const label = normalizeTextBlock(text.slice(0, endIndex));
+  return {
+    text: text.slice(endIndex),
+    labels: label.length > 0 ? [label] : [],
+  };
 };
 
 const extractSystemLabels = (text: string) => {
   const labels: string[] = [];
   let visibleText = text;
+
+  const leadingMemoryInstructions =
+    extractLeadingMemoryInstructions(visibleText);
+  visibleText = leadingMemoryInstructions.text;
+  labels.push(...leadingMemoryInstructions.labels);
 
   for (const pattern of SYSTEM_BLOCK_PATTERNS) {
     visibleText = visibleText.replace(pattern, (match) => {
@@ -107,6 +143,11 @@ const extractSystemLabels = (text: string) => {
   for (const pattern of DANGLING_SYSTEM_BLOCK_PATTERNS) {
     visibleText = visibleText.replace(pattern, "");
   }
+
+  const remainingLeadingMemoryInstructions =
+    extractLeadingMemoryInstructions(visibleText);
+  visibleText = remainingLeadingMemoryInstructions.text;
+  labels.push(...remainingLeadingMemoryInstructions.labels);
 
   return {
     text: normalizeTextBlock(visibleText),
