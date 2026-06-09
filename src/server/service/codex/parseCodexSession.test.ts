@@ -67,9 +67,7 @@ describe("parseCodexSession", () => {
       type: "user",
       text: "follow-up question",
     });
-    expect(parsed.sessionMeta.instructions).toContain(
-      "<apps_instructions>",
-    );
+    expect(parsed.sessionMeta.instructions).toContain("<apps_instructions>");
     expect(parsed.sessionMeta.instructions).toContain(
       "<permissions instructions>",
     );

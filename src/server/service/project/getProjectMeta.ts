@@ -1,15 +1,15 @@
 import {
+  type CodexSessionRecord,
   getWorkspaceName,
   listSessionsForWorkspace,
 } from "../codex/sessionFiles";
 import type { ProjectMeta } from "../types";
 import { isStandaloneProjectPath } from "./standalone";
 
-export const getProjectMeta = async (
+export const getProjectMetaFromSessionRecords = (
   workspacePath: string,
-): Promise<ProjectMeta> => {
-  const sessions = await listSessionsForWorkspace(workspacePath);
-
+  sessions: CodexSessionRecord[],
+): ProjectMeta => {
   const lastSessionAt = sessions.reduce<Date | null>((acc, record) => {
     if (!record.lastModifiedAt) return acc;
     if (!acc || record.lastModifiedAt > acc) {
@@ -27,4 +27,11 @@ export const getProjectMeta = async (
   };
 
   return projectMeta;
+};
+
+export const getProjectMeta = async (
+  workspacePath: string,
+): Promise<ProjectMeta> => {
+  const sessions = await listSessionsForWorkspace(workspacePath);
+  return getProjectMetaFromSessionRecords(workspacePath, sessions);
 };

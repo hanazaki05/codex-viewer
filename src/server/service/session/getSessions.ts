@@ -14,7 +14,12 @@ export const getSessions = async (
 ): Promise<{ sessions: Session[] }> => {
   const workspacePath = decodeProjectId(projectId);
   const sessionRecords = await listSessionsForWorkspace(workspacePath);
+  return getSessionsFromRecords(sessionRecords);
+};
 
+export const getSessionsFromRecords = async (
+  sessionRecords: Awaited<ReturnType<typeof listSessionsForWorkspace>>,
+): Promise<{ sessions: Session[] }> => {
   const sessions = await Promise.all(
     sessionRecords.map(async (record): Promise<Session> => {
       const meta = await getSessionMeta(record.filePath);

@@ -15,7 +15,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FC } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,9 +39,6 @@ export const SessionPageContent: FC<{
 }> = ({ projectId, sessionId }) => {
   const router = useRouter();
   const { session, turns, sessionMeta } = useSession(projectId, sessionId);
-  const {
-    data: { project, sessions },
-  } = useProject(projectId);
 
   const abortTask = useMutation({
     mutationFn: async (sessionId: string) => {
@@ -135,6 +132,7 @@ export const SessionPageContent: FC<{
         projectId={projectId}
         isMobileOpen={isMobileSidebarOpen}
         onMobileOpenChange={setIsMobileSidebarOpen}
+        fallback={<SessionSidebarFallback />}
       />
 
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
@@ -155,7 +153,7 @@ export const SessionPageContent: FC<{
             </div>
 
             <div className="px-1 sm:px-5 flex flex-wrap items-center gap-1 sm:gap-2">
-              {project.workspacePath && (
+              {sessionMeta.cwd && (
                 <Link
                   href={`/projects/${projectId}`}
                   target="_blank"
@@ -166,7 +164,7 @@ export const SessionPageContent: FC<{
                     className="h-6 sm:h-8 text-xs sm:text-sm flex items-center hover:bg-blue-50/60 hover:border-blue-300/60 hover:shadow-sm transition-all duration-200 cursor-pointer"
                   >
                     <ExternalLinkIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                    {project.meta.workspacePath}
+                    {sessionMeta.cwd}
                   </Badge>
                 </Link>
               )}
@@ -313,32 +311,85 @@ export const SessionPageContent: FC<{
         isOpen={isDiffModalOpen}
         onOpenChange={setIsDiffModalOpen}
       />
-      <DeleteSessionDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        projectId={projectId}
-        sessionId={sessionId}
-        sessionTitle={sessionTitle}
-        projectName={project.meta.workspaceName}
-        projectPath={project.meta.workspacePath}
-        isLastSessionInProject={project.meta.sessionCount === 1}
-        deletionDisabledReason={deleteDisabledReason}
-        onSuccess={({ deletedProject }) => {
-          if (deletedProject) {
-            router.replace("/projects");
-            return;
-          }
-
-          router.replace(
-            getNextSessionRoute({
-              currentSessionId: sessionId,
-              projectId,
-              sessions,
-            }),
-          );
-        }}
-      />
+      {isDeleteDialogOpen && (
+        <Suspense fallback={null}>
+          <ProjectDeleteSessionDialog
+            open={isDeleteDialogOpen}
+            onOpenChange={setIsDeleteDialogOpen}
+            projectId={projectId}
+            sessionId={sessionId}
+            sessionTitle={sessionTitle}
+            deletionDisabledReason={deleteDisabledReason}
+            onDeletedProject={() => {
+              router.replace("/projects");
+            }}
+            onDeletedSession={(nextRoute) => {
+              router.replace(nextRoute);
+            }}
+          />
+        </Suspense>
+      )}
     </div>
+  );
+};
+
+const SessionSidebarFallback = () => {
+  return (
+    <div className="hidden md:flex h-full">
+      <div className="h-full w-12 border-r border-sidebar-border bg-sidebar text-sidebar-foreground" />
+    </div>
+  );
+};
+
+const ProjectDeleteSessionDialog: FC<{
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  projectId: string;
+  sessionId: string;
+  sessionTitle: string;
+  deletionDisabledReason: string | null;
+  onDeletedProject: () => void;
+  onDeletedSession: (nextRoute: string) => void;
+}> = ({
+  open,
+  onOpenChange,
+  projectId,
+  sessionId,
+  sessionTitle,
+  deletionDisabledReason,
+  onDeletedProject,
+  onDeletedSession,
+}) => {
+  const {
+    data: { project, sessions },
+  } = useProject(projectId);
+
+  return (
+    <DeleteSessionDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      projectId={projectId}
+      sessionId={sessionId}
+      sessionTitle={sessionTitle}
+      projectName={project.meta.workspaceName}
+      projectPath={project.meta.workspacePath}
+      isLastSessionInProject={project.meta.sessionCount === 1}
+      deletionDisabledReason={deletionDisabledReason}
+      onSuccess={({ deletedProject }) => {
+        if (deletedProject) {
+          onDeletedProject();
+          return;
+        }
+
+        onDeletedSession(
+          getNextSessionRoute({
+            currentSessionId: sessionId,
+            projectId,
+            sessions,
+          }),
+        );
+      }}
+    />
   );
 };
 

@@ -4,7 +4,10 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { configSchema } from "../config/config";
 import { CodexTaskController } from "../service/codex/CodexTaskController";
-import { readSessionHeader } from "../service/codex/sessionFiles";
+import {
+  listSessionsForWorkspace,
+  readSessionHeader,
+} from "../service/codex/sessionFiles";
 import { getEventBus } from "../service/events/EventBus";
 import { getFileWatcher } from "../service/events/fileWatcher";
 import { sseEventResponse } from "../service/events/sseEventResponse";
@@ -14,13 +17,15 @@ import { getCommits } from "../service/git/getCommits";
 import { getDiff } from "../service/git/getDiff";
 import { getMcpList } from "../service/mcp/getMcpList";
 import { getProject } from "../service/project/getProject";
+import { getProjectMetaFromSessionRecords } from "../service/project/getProjectMeta";
 import { getProjects } from "../service/project/getProjects";
+import { decodeProjectId } from "../service/project/id";
 import {
   DeleteSessionError,
   deleteSession,
 } from "../service/session/deleteSession";
 import { getSession } from "../service/session/getSession";
-import { getSessions } from "../service/session/getSessions";
+import { getSessionsFromRecords } from "../service/session/getSessions";
 import { decodeSessionId } from "../service/session/id";
 import type { HonoAppType } from "./app";
 import { configMiddleware } from "./middleware/config.middleware";
@@ -57,10 +62,20 @@ export const routes = (app: HonoAppType) => {
 
       .get("/projects/:projectId", async (c) => {
         const { projectId } = c.req.param();
+        const workspacePath = decodeProjectId(projectId);
+        const sessionRecords = await listSessionsForWorkspace(workspacePath);
+        const projectMeta = getProjectMetaFromSessionRecords(
+          workspacePath,
+          sessionRecords,
+        );
 
-        const [{ project }, { sessions }] = await Promise.all([
-          getProject(projectId),
-          getSessions(projectId).then(({ sessions }) => {
+        if (sessionRecords.length === 0) {
+          const { project } = await getProject(projectId);
+          return c.json({ project, sessions: [] });
+        }
+
+        const { sessions } = await getSessionsFromRecords(sessionRecords).then(
+          ({ sessions }) => {
             let filteredSessions = sessions;
 
             // Filter sessions based on hideNoUserMessageSession setting
@@ -129,8 +144,14 @@ export const routes = (app: HonoAppType) => {
             return {
               sessions: filteredSessions,
             };
-          }),
-        ] as const);
+          },
+        );
+
+        const project = {
+          id: projectId,
+          workspacePath,
+          meta: projectMeta,
+        };
 
         return c.json({ project, sessions });
       })

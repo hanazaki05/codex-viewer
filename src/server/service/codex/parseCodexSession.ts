@@ -95,7 +95,32 @@ const MEMORY_INSTRUCTION_END_PATTERNS = [
   /========= MEMORY_SUMMARY ENDS =========/i,
 ];
 
+const SYSTEM_LABEL_MARKERS = [
+  "<user_instructions",
+  "</user_instructions>",
+  "<apps_instructions",
+  "</apps_instructions>",
+  "<environment_context",
+  "</environment_context>",
+  "<collaboration_mode",
+  "</collaboration_mode>",
+  "<skills_instructions",
+  "</skills_instructions>",
+  "<plugins_instructions",
+  "</plugins_instructions>",
+  "<personality_spec",
+  "</personality_spec>",
+  "<permissions instructions",
+  "</permissions instructions>",
+  "<instructions",
+  "</instructions>",
+  "# agents.md instructions for",
+];
+
 const normalizeTextBlock = (text: string) => {
+  if (!text.includes("\n\n\n")) {
+    return text.trim();
+  }
   return text.replace(/\n{3,}/g, "\n\n").trim();
 };
 
@@ -121,7 +146,20 @@ const extractLeadingMemoryInstructions = (text: string) => {
   };
 };
 
-const extractSystemLabels = (text: string) => {
+export const extractSystemLabels = (text: string) => {
+  const normalizedText = text.toLowerCase();
+  const hasSystemLabel =
+    SYSTEM_LABEL_MARKERS.some((marker) => {
+      return normalizedText.includes(marker);
+    }) || MEMORY_INSTRUCTION_INTRO_PATTERN.test(text);
+
+  if (!hasSystemLabel) {
+    return {
+      text: normalizeTextBlock(text),
+      labels: [] as string[],
+    };
+  }
+
   const labels: string[] = [];
   let visibleText = text;
 
@@ -155,7 +193,7 @@ const extractSystemLabels = (text: string) => {
   };
 };
 
-const extractTextFromContent = (content: unknown) => {
+export const extractTextFromContent = (content: unknown) => {
   if (typeof content === "string") {
     return extractSystemLabels(content);
   }

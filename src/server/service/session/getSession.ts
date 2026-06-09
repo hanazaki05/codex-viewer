@@ -4,7 +4,7 @@ import { parseCodexSession } from "../codex/parseCodexSession";
 import { readSessionHeader } from "../codex/sessionFiles";
 import { decodeProjectId } from "../project/id";
 import type { SessionDetail } from "../types";
-import { getSessionMeta } from "./getSessionMeta";
+import { getSessionMetaFromParsed } from "./getSessionMeta";
 import { decodeSessionId } from "./id";
 
 export const getSession = async (
@@ -34,7 +34,7 @@ export const getSession = async (
     id: sessionId,
     sessionUuid: header?.sessionUuid ?? null,
     jsonlFilePath: sessionPath,
-    meta: await getSessionMeta(sessionPath),
+    meta: await getSessionMetaFromParsed(sessionPath, parsed),
     entries: parsed.entries,
     turns: parsed.turns,
     metaEvents: parsed.metaEvents,

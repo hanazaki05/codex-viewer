@@ -7,7 +7,7 @@ import {
   Undo2Icon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type FC, useState } from "react";
+import { type FC, Suspense, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useProject } from "../../../../hooks/useProject";
 import { McpTab } from "./McpTab";
@@ -21,12 +21,14 @@ export const SessionSidebar: FC<{
   className?: string;
   isMobileOpen?: boolean;
   onMobileOpenChange?: (open: boolean) => void;
+  fallback?: React.ReactNode;
 }> = ({
   currentSessionId,
   projectId,
   className,
   isMobileOpen = false,
   onMobileOpenChange,
+  fallback = null,
 }) => {
   const router = useRouter();
   const {
@@ -149,7 +151,7 @@ export const SessionSidebar: FC<{
   );
 
   return (
-    <>
+    <Suspense fallback={fallback}>
       {/* Desktop sidebar */}
       <div className={cn("hidden md:flex h-full", className)}>
         {sidebarContent}
@@ -162,6 +164,6 @@ export const SessionSidebar: FC<{
         isOpen={isMobileOpen}
         onClose={() => onMobileOpenChange?.(false)}
       />
-    </>
+    </Suspense>
   );
 };
