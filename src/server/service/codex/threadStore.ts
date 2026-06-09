@@ -2,13 +2,14 @@ import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import { promisify } from "node:util";
 import { codexStateDbPath } from "../paths";
+import { extractSystemLabels } from "./parseCodexSession";
 
 const execFileAsync = promisify(execFile);
 
 const escapeSqlString = (value: string) => value.replaceAll("'", "''");
 
 const normalizeTitle = (title: string) => {
-  const normalized = title.trim();
+  const normalized = extractSystemLabels(title).text.trim();
   return normalized.length > 0 ? normalized : null;
 };
 
